@@ -1,5 +1,5 @@
 const express = require('express');
-const axios = require('axios');
+const https = require('https');
 const cors = require('cors');
 const cheerio = require('cheerio');
 const dotenv = require('dotenv');
@@ -17,63 +17,77 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'views')));
 
 // Route for scraping eMAG
-app.get('/scrape/emag', async (req, res) => {
+app.get('/scrape/emag', (req, res) => {
   const query = req.query.query || '';
   if (!query.trim()) {
     return res.status(400).json({ error: 'No query provided' });
   }
 
-  try {
-    const targetUrl = `https://www.emag.ro/search/${encodeURIComponent(query)}`;
-    const apiUrl = `https://api.scraperapi.com?api_key=${API_KEY}&url=${targetUrl}`;
+  const targetUrl = `https://www.emag.ro/search/${encodeURIComponent(query)}`;
+  const apiUrl = `https://api.scraperapi.com?api_key=${API_KEY}&url=${targetUrl}`;
 
-    const response = await axios.get(apiUrl);
-    const html = response.data;
+  https
+    .get(apiUrl, (response) => {
+      let data = '';
 
-    // Check for CAPTCHA detection
-    if (html.includes('captcha-widget')) {
-      return res.json({ captcha: true });
-    }
+      // Collect data chunks
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
 
-    // Extract product details using Cheerio
-    const products = extractProducts(html);
+      // When the response ends, process the data
+      response.on('end', () => {
+        if (data.includes('captcha-widget')) {
+          return res.json({ captcha: true });
+        }
 
-    res.json(products);
-  } catch (error) {
-    console.error('Scraping error:', error);
-    res.status(500).json({ error: 'Failed to scrape data' });
-  }
+        // Extract product details using Cheerio
+        const products = extractProducts(data);
+        res.json(products);
+      });
+    })
+    .on('error', (error) => {
+      console.error('Scraping error:', error);
+      res.status(500).json({ error: 'Failed to scrape data' });
+    });
 });
 
 // Route for scraping eBay
-app.get('/scrape/ebay', async (req, res) => {
+app.get('/scrape/ebay', (req, res) => {
   const query = req.query.query || '';
   if (!query.trim()) {
     return res.status(400).json({ error: 'No query provided' });
   }
 
-  try {
-    const targetUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
-      query
-    )}`;
-    const apiUrl = `https://api.scraperapi.com?api_key=${API_KEY}&url=${targetUrl}`;
+  const targetUrl = `https://www.ebay.com/sch/i.html?_nkw=${encodeURIComponent(
+    query
+  )}`;
+  const apiUrl = `https://api.scraperapi.com?api_key=${API_KEY}&url=${targetUrl}`;
 
-    const response = await axios.get(apiUrl);
-    const html = response.data;
+  https
+    .get(apiUrl, (response) => {
+      let data = '';
 
-    // Check for CAPTCHA detection
-    if (html.includes('captcha-widget')) {
-      return res.json({ captcha: true });
-    }
+      // Collect data chunks
+      response.on('data', (chunk) => {
+        data += chunk;
+      });
 
-    // Extract product details using Cheerio
-    const products = extractEbayProducts(html);
+      // When the response ends, process the data
+      response.on('end', () => {
+        if (data.includes('captcha-widget')) {
+          return res.json({ captcha: true });
+        }
 
-    res.json(products);
-  } catch (error) {
-    console.error('Scraping error:', error);
-    res.status(500).json({ error: 'Failed to scrape data' });
-  }
+        // Extract product details using Cheerio
+        const products = extractEbayProducts(data);
+        res.json(products);
+      });
+    })
+    .on('error', (error) => {
+      console.error('Scraping error:', error);
+      res.status(500).json({ error: 'Failed to scrape data' });
+    });
 });
 
 // Function to extract product data from eMAG
